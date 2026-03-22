@@ -139,8 +139,11 @@ export default function Login() {
                     setLoading(true);
                     setError('');
                     try {
+                      const isNative = import.meta.env.VITE_PLATFORM === 'android' || import.meta.env.VITE_PLATFORM === 'ios';
+                      const baseUrl = isNative ? 'com.boysatwork.app://localhost' : window.location.origin;
+                      
                       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                        redirectTo: `${window.location.origin}/reset-password`,
+                        redirectTo: `${baseUrl}/reset-password`,
                       });
                       if (error) throw error;
                       alert('Password reset link sent to your email!');

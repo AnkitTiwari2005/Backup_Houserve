@@ -19,6 +19,7 @@ export interface Address {
 interface AddressState {
   selectedAddress: Address | null;
   setSelectedAddress: (address: Address | null) => void;
+  clearAddress: () => void;
 }
 
 export const useAddressStore = create<AddressState>()(
@@ -26,6 +27,7 @@ export const useAddressStore = create<AddressState>()(
     (set) => ({
       selectedAddress: null,
       setSelectedAddress: (address) => set({ selectedAddress: address }),
+      clearAddress: () => set({ selectedAddress: null }),
     }),
     {
       name: 'address-storage',

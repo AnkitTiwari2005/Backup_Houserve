@@ -111,10 +111,22 @@ serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ clientSecret: stripeData.client_secret }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    });
+    return new Response(
+      JSON.stringify({
+        clientSecret: stripeData.client_secret,
+        amount: totalInPaise,
+        breakdown: {
+          subtotal: subtotal,
+          platformFee: platformFee,
+          gst: gst,
+          total: total
+        }
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      },
+    );
 
   } catch (error: any) {
     console.error("Payment Intent Error:", error.message);

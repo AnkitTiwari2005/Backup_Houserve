@@ -48,7 +48,7 @@ export default function Signup() {
       // to avoid 'permission denied' errors during the signup session race
       
       // Automatically sign them in or prompt to check email
-      navigate('/');
+      navigate('/verify-email');
     } catch (err: any) {
       setError(err.message || 'Failed to create account');
     } finally {

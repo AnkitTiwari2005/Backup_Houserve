@@ -23,6 +23,7 @@ const BookingDetail = lazy(() => import('./pages/BookingDetail'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const Profile = lazy(() => import('./pages/Profile'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 
 import { App as CapacitorApp } from '@capacitor/app';
 
@@ -117,6 +118,7 @@ function App() {
             </Route>
             
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="*" element={<Navigate to="/splash" replace />} />
           </Routes>
         </Suspense>

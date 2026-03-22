@@ -35,6 +35,11 @@ export const useAuthStore = create<AuthState>()(
       signOut: async () => {
         await supabase.auth.signOut();
         set({ user: null, profile: null });
+        // SECURE: Clear sensitive stores on logout (Audit Fix #4.1)
+        const { useAddressStore } = await import('./addressStore');
+        const { useCartStore } = await import('./cartStore');
+        useAddressStore.getState().clearAddress();
+        useCartStore.getState().clearCart();
       },
       fetchProfile: async (userId: string) => {
         try {

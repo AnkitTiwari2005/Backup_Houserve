@@ -71,6 +71,17 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 4.1 BOOKING ITEMS (Support for Multi-Service Orders)
+CREATE TABLE IF NOT EXISTS public.booking_items (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  booking_id UUID REFERENCES public.bookings(id) ON DELETE CASCADE NOT NULL,
+  service_id UUID REFERENCES public.services(id) NOT NULL,
+  quantity INTEGER DEFAULT 1,
+  unit_price DECIMAL(10,2) NOT NULL,
+  total_price DECIMAL(10,2) NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 5. NOTIFICATIONS (User Alerts)
 CREATE TABLE IF NOT EXISTS public.notifications (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

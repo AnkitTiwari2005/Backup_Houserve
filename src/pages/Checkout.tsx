@@ -17,7 +17,7 @@ if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) {
 }
 
 
-function CheckoutForm({ bookingDetails }: { bookingDetails: any }) {
+function CheckoutForm({ bookingDetails, authBreakdown }: { bookingDetails: any, authBreakdown: any }) {
   const stripe = useStripe();
   const elements = useElements();
   const navigate = useNavigate();
@@ -53,11 +53,14 @@ function CheckoutForm({ bookingDetails }: { bookingDetails: any }) {
         // Correctly format time: '01:00 PM' -> '13:00'
         const formatTimeTo24h = (time12h: string) => {
           const [time, modifier] = time12h.split(' ');
-          let [hours, minutes] = time.split(':');
+          const [h, minutes] = time.split(':');
+          let hours = h;
           if (hours === '12') hours = '00';
           if (modifier === 'PM') hours = (parseInt(hours, 10) + 12).toString().padStart(2, '0');
           return `${hours.padStart(2, '0')}:${minutes}`;
         };
+
+        const finalPrices = authBreakdown || bookingDetails;
 
         const newBooking = {
           customer_id: profile?.id,
@@ -71,10 +74,10 @@ function CheckoutForm({ bookingDetails }: { bookingDetails: any }) {
             phone: selectedAddress?.phone
           },
           special_instructions: bookingDetails.specialInstructions,
-          subtotal: bookingDetails.subtotal,
-          platform_fee: bookingDetails.platformFee,
-          gst_amount: bookingDetails.gst,
-          total_amount: bookingDetails.total,
+          subtotal: finalPrices.subtotal,
+          platform_fee: finalPrices.platformFee,
+          gst_amount: finalPrices.gst,
+          total_amount: finalPrices.total,
           stripe_payment_intent_id: paymentIntent.id,
           stripe_payment_status: 'paid'
         };
@@ -84,8 +87,26 @@ function CheckoutForm({ bookingDetails }: { bookingDetails: any }) {
           .insert(newBooking)
           .select()
           .single();
-
+        
         if (dbError) throw dbError;
+
+        // 2.5 Insert multi-service line items (Audit Fix #5.3)
+        const bookingItems = items.map(item => ({
+          booking_id: data.id,
+          service_id: item.service.id,
+          quantity: item.quantity,
+          unit_price: item.service.price,
+          total_price: item.service.price * item.quantity
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('booking_items')
+          .insert(bookingItems);
+
+        if (itemsError) {
+          console.error("Operational Warning: Multi-item storage failed", itemsError);
+          // Non-blocking for the user, but should be logged
+        }
 
         // 3. Send Admin Email Notification
         const notificationResult = await sendAdminOrderNotification({
@@ -174,6 +195,8 @@ export default function Checkout() {
   
   const [clientSecret, setClientSecret] = useState('');
   const [loading, setLoading] = useState(true);
+  const [authBreakdown, setAuthBreakdown] = useState<any>(null);
+  const [initError, setInitError] = useState<string | null>(null);
 
   const bookingDetails = location.state;
 
@@ -219,12 +242,16 @@ export default function Checkout() {
 
         if (result.clientSecret) {
           setClientSecret(result.clientSecret);
+          // AUTHORITATIVE: Update local state with server-calculated totals (Audit fix #5.1)
+          if (result.breakdown) {
+            setAuthBreakdown(result.breakdown);
+          }
         } else {
           throw new Error('No client secret received from payment server.');
         }
       } catch (err: any) {
         console.error('Payment Initialization Failed:', err);
-        alert(`Payment Initialization Failed: ${err.message || 'Could not initialize payment. Please try again.'}`);
+        setInitError(err.message || 'Could not initialize payment. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -263,7 +290,19 @@ export default function Checkout() {
           </div>
         </div>
 
-        {loading ? (
+        {initError ? (
+          <div className="card border-error/20 bg-error/5 text-center py-8">
+            <svg className="w-12 h-12 text-error mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+            <h3 className="font-syne font-bold text-error mb-2 text-lg">Payment Failed to Initialize</h3>
+            <p className="text-sm text-text-secondary mb-6 px-4">{initError}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="btn-primary"
+            >
+              Try Again
+            </button>
+          </div>
+        ) : loading ? (
           <div className="flex justify-center flex-col items-center py-12 card border border-border border-dashed">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
             <p className="text-sm font-medium text-text-secondary animate-pulse">Initializing Secure Payment Gateway...</p>
@@ -284,7 +323,7 @@ export default function Checkout() {
               }
             } 
           }} stripe={stripePromise}>
-            <CheckoutForm bookingDetails={bookingDetails} />
+            <CheckoutForm bookingDetails={bookingDetails} authBreakdown={authBreakdown} />
           </Elements>
         )}
       </div>

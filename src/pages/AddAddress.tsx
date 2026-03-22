@@ -167,7 +167,7 @@ export default function AddAddress() {
           setValue('street', [addressObj.road, addressObj.suburb].filter(Boolean).join(', '));
         }
         
-        let city = addressObj.city || addressObj.town || addressObj.state_district;
+        const city = addressObj.city || addressObj.town || addressObj.state_district;
         if (city) {
           // Normalize city to match Delhi NCR dropdown constraints if possible
           const normalized = DELHINCR_CITIES.find(c => city.toLowerCase().includes(c.toLowerCase()));
@@ -207,19 +207,32 @@ export default function AddAddress() {
         full_address: fullAddress,
       };
 
-      let result;
-      if (editId) {
-        result = await supabase
+      const result = editId
+        ? await supabase
           .from('user_addresses')
           .update(payload)
-          .eq('id', editId);
-      } else {
-        result = await supabase
+          .eq('id', editId)
+        : await supabase
           .from('user_addresses')
           .insert({ ...payload, is_default: false });
-      }
 
       if (result.error) throw result.error;
+
+      // UPDATE STORE (Audit Fix #4.2)
+      const { useAddressStore } = await import('../stores/addressStore');
+      const store = useAddressStore.getState();
+      
+      const savedAddress = {
+        id: editId || (result.data as any)?.[0]?.id,
+        ...payload
+      };
+
+      if (editId && store.selectedAddress?.id === editId) {
+        store.setSelectedAddress(savedAddress as any);
+      } else if (!editId && !store.selectedAddress) {
+        // If it was the first address added, select it
+        store.setSelectedAddress(savedAddress as any);
+      }
       
       navigate('/address-selection');
     } catch (err: any) {
