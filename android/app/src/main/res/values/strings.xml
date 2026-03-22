@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">boys-at-work</string>
+    <string name="title_activity_main">boys-at-work</string>
+    <string name="package_name">com.boysatwork.app</string>
+    <string name="custom_url_scheme">com.boysatwork.app</string>
+</resources>
