@@ -10,7 +10,12 @@ import { sendAdminOrderNotification } from '../lib/notifications';
 
 // Initialize Stripe outside component
 // Using the test key provided in prompt
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_51T1ACQBLwP4exFi3uOdQupqSIQhT1rEwBBCCmeHgoVQuGlLHP0Kmvp5BiBPeCZWKyIUfbr6yDQxsGyzuF2O5oVTu00MFJCnZBs');
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
+
+if (!import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY) {
+  console.warn('Backend Warning: VITE_STRIPE_PUBLISHABLE_KEY is missing. Payment initialization will fail.');
+}
+
 
 function CheckoutForm({ bookingDetails }: { bookingDetails: any }) {
   const stripe = useStripe();
@@ -188,39 +193,38 @@ export default function Checkout() {
     // SECURE: Call Supabase Edge Function to create PaymentIntent
     const createPaymentIntent = async () => {
       try {
-        const { data, error: invokeError } = await supabase.functions.invoke('create-payment-intent', {
-          body: {
-            serviceIds: items.map(i => i.service.id),
-            description: `Boys@Work Booking - ${profile?.full_name}`
-          }
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('No active session found');
+
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment-intent`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            items: items.map(item => ({
+              serviceId: item.service.id,
+              quantity: item.quantity
+            })),
+            description: `Booking for ${items.map(i => i.service.name).join(', ')}`
+          }),
         });
 
-        // 1. Handle HTTP/Gateway level errors (Opaque 401s e.g.)
-        if (invokeError) {
-          console.error("Gateway/Network Error:", invokeError);
-          // If we get an opaque error, try to explain it
-          const msg = invokeError.message || 'Server connection failed.';
-          if (msg.includes('non-2xx')) {
-             throw new Error("Generic Gateway Error. Please check if your login session has expired.");
-          }
-          throw new Error(msg);
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || `Error ${response.status}: ${response.statusText}`);
         }
 
-        // 2. Handle Application level errors (Explicit success/fail from our code)
-        if (data?.error) {
-          console.error("Production Logic Error:", data.error);
-          throw new Error(data.error);
+        if (result.clientSecret) {
+          setClientSecret(result.clientSecret);
+        } else {
+          throw new Error('No client secret received from payment server.');
         }
-        
-        if (!data?.clientSecret) {
-          console.error("Invalid response from payment server:", data);
-          throw new Error('No payment secret received from server.');
-        }
-
-        setClientSecret(data.clientSecret);
-      } catch (error: any) {
-        console.error("Checkout Final Error:", error);
-        alert(`Payment Initialization Failed: ${error.message || 'Unknown Network Error'}`);
+      } catch (err: any) {
+        console.error('Payment Initialization Failed:', err);
+        alert(`Payment Initialization Failed: ${err.message || 'Could not initialize payment. Please try again.'}`);
       } finally {
         setLoading(false);
       }

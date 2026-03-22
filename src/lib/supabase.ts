@@ -1,11 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Get SUPABASE credentials from env vars
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://wwnbbjvxrhjjwfshtxto.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind3bmJianZ4cmhqandmc2h0eHRvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyODIwMjgsImV4cCI6MjA4ODg1ODAyOH0.43vGCUfAos1xPr0fIvDEy2mzO1ajjof42FJC1ryrq9w';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!import.meta.env.VITE_SUPABASE_URL) {
-  console.warn('VITE_SUPABASE_URL is missing, using fallback.');
+// FAIL-FAST: Strictly enforce environment variables in production
+if (!supabaseUrl || !supabaseAnonKey) {
+  const errorMsg = 'CRITICAL: Supabase Environment Variables (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY) are missing. Application cannot initialize.';
+  console.error(errorMsg);
+  if (import.meta.env.PROD) {
+    throw new Error(errorMsg);
+  }
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(
+  supabaseUrl || '', 
+  supabaseAnonKey || ''
+);

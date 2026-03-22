@@ -1,10 +1,11 @@
 // Supabase Edge Function: admin-notification
-// v2.1 - Added Customer Phone support
+// v2.2 - Security Hardened (No hardcoded keys)
 // Deploy with: supabase functions deploy admin-notification
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
-const RESEND_API_KEY = "re_cNz78zAc_FGNJ5oSh1ENHU7VHddbxeVwU"
+// SECURE: Resend key is now fetched from Supabase Vault/Secrets
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
 const ADMIN_EMAILS = ["12328.uspc@gmail.com"]
 
 const corsHeaders = {
@@ -17,16 +18,22 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  console.log("Edge Function (v2.1) received a request...");
+  console.log("Edge Function (v2.2) received a request...");
 
   try {
+    if (!RESEND_API_KEY) {
+      return new Response(JSON.stringify({ error: "Edge Function misconfigured: RESEND_API_KEY not set in Supabase Secrets." }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500, // STANDARD: Use 500 for server misconfiguration
+      })
+    }
+
     const body = await req.json();
     console.log("Edge Function Received Payload:", JSON.stringify(body));
 
     const booking = body.booking || {};
     const customerProfile = body.customerProfile || {};
 
-    // Note: phone is passed inside the booking object from Checkout.tsx
     const customerPhone = booking.phone || customerProfile.phone || 'N/A';
 
     const emailBody = `
@@ -69,7 +76,7 @@ serve(async (req) => {
         details: data
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200, 
+        status: res.status, // STANDARD: Passthrough the status from Resend
       })
     }
 
@@ -81,7 +88,7 @@ serve(async (req) => {
     console.error("Edge Function Error:", error.message);
     return new Response(JSON.stringify({ error: error.message, status: 'internal_error' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200, 
+      status: 500, // STANDARD: Use 500 for internal crashes
     })
   }
 })

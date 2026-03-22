@@ -14,7 +14,7 @@ export default function Cart() {
   const [specialInstructions, setSpecialInstructions] = useState('');
 
   const subtotal = getSubtotal();
-  const platformFee = 49;
+  const platformFee = 50;
   const gst = Math.round((subtotal + platformFee) * 0.18);
   const total = subtotal + platformFee + gst;
 
