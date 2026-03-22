@@ -111,6 +111,8 @@ serve(async (req) => {
       });
     }
 
+    const totalInPaise = Math.round(total * 100);
+
     return new Response(
       JSON.stringify({
         clientSecret: stripeData.client_secret,
