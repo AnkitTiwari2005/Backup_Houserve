@@ -11,13 +11,24 @@ import L from 'leaflet';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 
-// Fix for leaflet default marker icon issue in react/webpack/vite
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+// Fix for leaflet default marker icon issue (Audit Fix #2.10)
+// Using a standard SVG data-URI to avoid external CDN dependencies
+const MARKER_ICON_SVG = `data:image/svg+xml;base64,${btoa(`
+  <svg width="25" height="41" viewBox="0 0 25 41" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0ZM12.5 17C10.015 17 8 14.985 8 12.5C8 10.015 10.015 8 12.5 8C14.985 8 17 10.015 17 12.5C17 14.985 14.985 17 12.5 17Z" fill="#F3732A"/>
+  </svg>
+`)}`;
+
+const defaultIcon = L.icon({
+  iconUrl: MARKER_ICON_SVG,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png', // Shadow is less critical but I'll keep it for now or remove if needed
+  shadowSize: [41, 41]
 });
+
+L.Marker.prototype.options.icon = defaultIcon;
 
 const DELHINCR_CITIES = ['Delhi', 'Noida', 'Gurugram', 'Faridabad', 'Ghaziabad', 'Greater Noida'];
 
@@ -212,9 +223,11 @@ export default function AddAddress() {
           .from('user_addresses')
           .update(payload)
           .eq('id', editId)
+          .select()
         : await supabase
           .from('user_addresses')
-          .insert({ ...payload, is_default: false });
+          .insert({ ...payload, is_default: false })
+          .select();
 
       if (result.error) throw result.error;
 

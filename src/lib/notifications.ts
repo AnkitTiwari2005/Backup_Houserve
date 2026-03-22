@@ -1,4 +1,37 @@
+import { PushNotifications } from '@capacitor/push-notifications';
 import { supabase } from './supabase';
+
+export async function initializeNotifications() {
+  const isPushSupported = await PushNotifications.checkPermissions();
+  
+  if (isPushSupported.receive !== 'granted') {
+    const permission = await PushNotifications.requestPermissions();
+    if (permission.receive !== 'granted') return;
+  }
+
+  // Register with Apple / Google
+  await PushNotifications.register();
+
+  // On success, we should store the token in our database
+  await PushNotifications.addListener('registration', async (token) => {
+    console.log('Push registration success! Token:', token.value);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from('profiles')
+        .update({ push_token: token.value })
+        .eq('id', user.id);
+    }
+  });
+
+  await PushNotifications.addListener('registrationError', (err) => {
+    console.error('Registration error: ', err.error);
+  });
+
+  await PushNotifications.addListener('pushNotificationReceived', (notification) => {
+    console.log('Push received: ', notification);
+  });
+}
 
 export async function sendAdminOrderNotification(booking: any, customerProfile: any) {
   try {

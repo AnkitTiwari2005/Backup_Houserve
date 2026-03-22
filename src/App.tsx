@@ -63,8 +63,17 @@ function App() {
             access_token: accessToken,
             refresh_token: refreshToken
           });
+          
           if (!error) {
-            window.location.href = '/home';
+            // AUTHORITATIVE ROUTING (Audit Fix #2.5)
+            const path = url.split('://')[1]?.split('?')[0]?.split('#')[0] || '';
+            if (path.includes('reset-password')) {
+               window.location.href = '/reset-password';
+            } else if (path.includes('verify-email')) {
+               window.location.href = '/verify-email';
+            } else {
+               window.location.href = '/home';
+            }
           }
         }
       }
@@ -78,6 +87,11 @@ function App() {
       } else {
         setLoading(false);
       }
+    });
+
+    // Initialize Push Notifications (Audit Fix #2.9)
+    import('./lib/notifications').then(({ initializeNotifications }) => {
+      initializeNotifications();
     });
 
     return () => {

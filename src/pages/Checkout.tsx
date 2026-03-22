@@ -286,7 +286,7 @@ export default function Checkout() {
           </div>
           <div className="flex justify-between items-center pt-3 mt-1 border-t border-border">
             <span className="font-syne font-bold text-accent">Total to Pay</span>
-            <span className="font-mono font-bold text-primary text-xl">₹{bookingDetails.total}</span>
+            <span className="font-mono font-bold text-primary text-xl">₹{authBreakdown?.total || bookingDetails.total}</span>
           </div>
         </div>
 
