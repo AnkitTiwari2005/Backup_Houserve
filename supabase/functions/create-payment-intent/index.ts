@@ -40,18 +40,50 @@ serve(async (req) => {
     }
 
     // SECURE: Initialize client with the user's JWT to verify authenticity
-    const jwt = authHeader.replace('Bearer ', '');
+    const jwt = authHeader.replace('Bearer ', '').trim();
+    
+    // Debug info: Match check
+    const isTargetProject = supabaseUrl.includes('wwnbbjvxrhjjwfshtxto');
+    console.log(`[AUTH] Verifying JWT for project match: ${isTargetProject}`);
+
+    // Create a regular client for verification
     const supabaseClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: `Bearer ${jwt}` } }
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+      auth: { persistSession: false, autoRefreshToken: false }
     });
 
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    // Strategy 1: Standard getUser verify
+    let { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+
+    // Strategy 2: Resilience Fallback (Sometimes Deno environment has signature mismatches with native app tokens)
+    if (authError || !user) {
+      console.warn('Strategy 1 failed, trying Strategy 2 (Admin verification)...');
+      try {
+        // We use the service role key to check if this token is actually valid for our project
+        // This is still secure because only a valid token from THIS project can be decoded correctly by the server
+        const supabaseAdmin = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+        const { data: adminData, error: adminError } = await supabaseAdmin.auth.getUser(jwt);
+        
+        if (!adminError && adminData.user) {
+          user = adminData.user;
+          authError = null;
+          console.log('[OK] Strategy 2 succeeded');
+        }
+      } catch (e) {
+        console.error('Strategy 2 crash:', e);
+      }
+    }
 
     if (authError || !user) {
-      console.error('JWT verification failed:', authError);
+      console.error('JWT verification failed:', authError?.message);
       return new Response(JSON.stringify({ 
         error: 'Invalid JWT', 
-        details: authError?.message || 'Token could not be validated.' 
+        details: authError?.message || 'Token could not be validated.',
+        diagnostics: {
+          project_match: isTargetProject,
+          url_used: supabaseUrl.substring(0, 20) + '...',
+          auth_error: authError
+        }
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 401,
@@ -60,7 +92,7 @@ serve(async (req) => {
 
     const userId = user.id;
     const userEmail = user.email || 'unknown';
-    console.log(`[OK] Secured User: ${userEmail} | ID: ${userId}`);
+    console.log(`[OK] Verified User: ${userEmail} | ID: ${userId}`);
 
     // Parse request body
     const { items, description } = await req.json();

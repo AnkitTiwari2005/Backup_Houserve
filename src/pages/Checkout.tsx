@@ -27,6 +27,7 @@ function CheckoutForm({ bookingDetails, authBreakdown }: { bookingDetails: any, 
   
   const [error, setError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const [elementReady, setElementReady] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +39,11 @@ function CheckoutForm({ bookingDetails, authBreakdown }: { bookingDetails: any, 
 
     try {
       // 1. Confirm payment with Stripe
+      const paymentElement = elements.getElement(PaymentElement);
+      if (!paymentElement) {
+        throw new Error('Payment form is still loading. Please wait a moment.');
+      }
+
       const { error: paymentError, paymentIntent } = await stripe.confirmPayment({
         elements,
         redirect: 'if_required', // Avoid immediate redirect, handle manually
@@ -153,9 +159,12 @@ function CheckoutForm({ bookingDetails, authBreakdown }: { bookingDetails: any, 
         Secure Payment via Stripe
       </div>
 
-      <PaymentElement options={{ 
-        layout: 'tabs'
-      }} />
+      <PaymentElement 
+        onReady={() => setElementReady(true)}
+        options={{ 
+          layout: 'tabs'
+        }} 
+      />
 
       {error && (
         <div className="bg-error/10 text-error p-3 rounded-lg text-sm flex items-start gap-2 border border-error/20">
@@ -165,7 +174,7 @@ function CheckoutForm({ bookingDetails, authBreakdown }: { bookingDetails: any, 
       )}
 
       <button
-        disabled={!stripe || processing}
+        disabled={!stripe || !elements || !elementReady || processing}
         type="submit"
         className="w-full btn-primary py-4 text-lg rounded-2xl flex justify-center items-center gap-2 shadow-lg"
       >
@@ -196,6 +205,7 @@ export default function Checkout() {
   const [loading, setLoading] = useState(true);
   const [authBreakdown, setAuthBreakdown] = useState<any>(null);
   const [initError, setInitError] = useState<string | null>(null);
+  const [diagnostics, setDiagnostics] = useState<any>(null);
 
   const bookingDetails = location.state;
 
@@ -212,6 +222,14 @@ export default function Checkout() {
       return () => clearTimeout(timer);
     }
 
+    // Proactive check for Stripe placeholder keys
+    const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
+    if (stripeKey.includes('pk_test_placeholder') || (stripeKey.length > 5 && stripeKey.includes('0Z9Y8X7W6V5U4T3S2R1Q0P9O8N7M6L5K4J3I2H1G0F9E8D7C6B5A4'))) {
+      setInitError('Stripe Configuration Incomplete: A placeholder key was detected in your .env file. Please replace VITE_STRIPE_PUBLISHABLE_KEY with your real Stripe Test Publishable Key.');
+      setLoading(false);
+      return;
+    }
+
     // SECURE: Call Supabase Edge Function to create PaymentIntent
     const createPaymentIntent = async () => {
       try {
@@ -226,8 +244,8 @@ export default function Checkout() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
+            'Authorization': `Bearer ${token.trim()}`,
+            'apikey': (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim()
           },
           body: JSON.stringify({
             items: items.map(item => ({
@@ -241,7 +259,8 @@ export default function Checkout() {
         const result = await response.json();
 
         if (!response.ok) {
-          const detail = result.error || result.message || 'Unknown server error';
+          const detail = result.details || result.error || result.message || 'Unknown server error';
+          if (result.diagnostics) setDiagnostics(result.diagnostics);
           throw new Error(detail);
         }
 
@@ -301,7 +320,13 @@ export default function Checkout() {
           <div className="card border-error/20 bg-error/5 text-center py-8">
             <svg className="w-12 h-12 text-error mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
             <h3 className="font-syne font-bold text-error mb-2 text-lg">Payment Failed to Initialize</h3>
-            <p className="text-sm text-text-secondary mb-6 px-4">{initError}</p>
+            <p className="text-sm text-text-secondary mb-4 px-4">{initError}</p>
+            {diagnostics && (
+              <div className="mx-4 mb-6 p-3 bg-white/50 rounded-xl border border-error/10 text-[10px] font-mono text-left text-error/70 break-all overflow-y-auto max-h-[100px]">
+                <div className="font-bold mb-1 opacity-50 uppercase tracking-tighter">Debug Data:</div>
+                {JSON.stringify(diagnostics, null, 1)}
+              </div>
+            )}
             <div className="flex flex-col gap-3 px-4">
               <button 
                 onClick={() => window.location.reload()}
@@ -311,12 +336,13 @@ export default function Checkout() {
               </button>
               <button 
                 onClick={async () => {
+                  setLoading(true);
                   await supabase.auth.signOut();
                   navigate('/login', { replace: true });
                 }}
                 className="w-full py-3 text-sm font-medium text-text-secondary hover:text-primary transition-colors border border-border rounded-xl"
               >
-                Logout & Re-login (Fixed 401)
+                Account / Switch User
               </button>
             </div>
           </div>

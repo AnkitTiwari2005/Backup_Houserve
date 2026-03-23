@@ -109,6 +109,7 @@ GRANT SELECT ON public.services TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.profiles TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.user_addresses TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.bookings TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.booking_items TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON public.notifications TO authenticated;
 
 -- ==========================================
@@ -143,6 +144,25 @@ CREATE POLICY "Users can manage own bookings" ON public.bookings FOR ALL USING (
 -- Notifications: Owned by user
 DROP POLICY IF EXISTS "Users can manage own notifications" ON public.notifications;
 CREATE POLICY "Users can manage own notifications" ON public.notifications FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- Booking Items: Linked to bookings owned by user
+DROP POLICY IF EXISTS "Users can view own booking items" ON public.booking_items;
+CREATE POLICY "Users can view own booking items" ON public.booking_items FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.bookings 
+    WHERE public.bookings.id = booking_id 
+    AND public.bookings.customer_id = auth.uid()
+  )
+);
+
+DROP POLICY IF EXISTS "Users can insert own booking items" ON public.booking_items;
+CREATE POLICY "Users can insert own booking items" ON public.booking_items FOR INSERT WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.bookings 
+    WHERE public.bookings.id = booking_id 
+    AND public.bookings.customer_id = auth.uid()
+  )
+);
 
 -- ==========================================
 -- TRIGGERS & FUNCTIONS
