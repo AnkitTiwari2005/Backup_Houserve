@@ -90,8 +90,22 @@ function CheckoutForm({ bookingDetails, authBreakdown }: { bookingDetails: any, 
         
         if (dbError) throw dbError;
 
-        // Note: The database schema currently only supports a single `service_id` via the `newBooking` object.
-        // Multi-service storage has been deferred until the database schema `booking_items` is initialized.
+        // 2.5 Insert multi-service line items (Audit Fix 2.3)
+        const bookingItems = items.map(item => ({
+          booking_id: data.id,
+          service_id: item.service.id,
+          quantity: item.quantity,
+          unit_price: item.service.price,
+          total_price: item.service.price * item.quantity
+        }));
+
+        const { error: itemsError } = await supabase
+          .from('booking_items')
+          .insert(bookingItems);
+
+        if (itemsError) {
+          console.error("Operational Warning: Multi-item storage failed", itemsError);
+        }
 
         // 3. Send Admin Email Notification
         const notificationResult = await sendAdminOrderNotification({

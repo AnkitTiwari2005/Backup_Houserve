@@ -12,21 +12,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Decode JWT payload without signature verification
-// Security: The Supabase gateway already validates the apikey header
-function decodeJwtPayload(token: string): Record<string, any> | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length !== 3) return null;
-    // Base64URL to Base64
-    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const padded = base64 + '=='.slice(0, (4 - base64.length % 4) % 4);
-    const decoded = atob(padded);
-    return JSON.parse(decoded);
-  } catch {
-    return null;
-  }
-}
+// Cryptographic verification is enforced by calling supabaseAdmin.auth.getUser()
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -53,25 +39,24 @@ serve(async (req) => {
       });
     }
 
-    // Decode JWT payload — no signature verification needed
-    // The Supabase API gateway validates apikey before the function even runs
-    const jwt = authHeader.replace('Bearer ', '');
-    const payload = decodeJwtPayload(jwt);
+    // Use ANON_KEY to initialize the client
+    const supabaseClient = createClient(supabaseUrl, anonKey);
 
-    if (!payload || !payload.sub) {
-      console.error('JWT decode failed. Payload:', payload);
-      return new Response(JSON.stringify({ error: 'Could not decode user token. Please logout and login again.' }), {
+    // SECURE: Cryptographically verify the JWT by fetching the user from the Auth server
+    const jwt = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(jwt);
+
+    if (authError || !user) {
+      console.error('JWT verification failed:', authError);
+      return new Response(JSON.stringify({ error: 'Invalid or expired token. Please login again.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 401,
       });
     }
 
-    const userId = payload.sub;
-    const userEmail = payload.email || 'unknown';
-    console.log(`[OK] User: ${userEmail} | ID: ${userId}`);
-
-    // Use ANON_KEY for DB operations since services table is publicly readable
-    const supabaseAdmin = createClient(supabaseUrl, anonKey);
+    const userId = user.id;
+    const userEmail = user.email || 'unknown';
+    console.log(`[OK] Secured User: ${userEmail} | ID: ${userId}`);
 
     // Parse request body
     const { items, description } = await req.json();
@@ -84,7 +69,7 @@ serve(async (req) => {
     }
 
     const serviceIds = items.map((item: any) => item.serviceId);
-    const { data: services, error: dbError } = await supabaseAdmin
+    const { data: services, error: dbError } = await supabaseClient
       .from('services')
       .select('id, name, price')
       .in('id', serviceIds);

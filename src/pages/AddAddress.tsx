@@ -307,7 +307,7 @@ export default function AddAddress() {
                   if (addressObj.road || addressObj.suburb) {
                     setValue('street', [addressObj.road, addressObj.suburb].filter(Boolean).join(', '));
                   }
-                  let city = addressObj.city || addressObj.town || addressObj.state_district;
+                  const city = addressObj.city || addressObj.town || addressObj.state_district;
                   if (city) {
                     const normalized = DELHINCR_CITIES.find(c => city.toLowerCase().includes(c.toLowerCase()));
                     if (normalized) setValue('city', normalized);

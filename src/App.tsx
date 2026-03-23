@@ -5,6 +5,7 @@ import { supabase } from './lib/supabase';
 import { PublicRoute, ProtectedRoute } from './components/ProtectedRoute';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
+import { initializeNotifications } from './lib/notifications';
 
 // Lazy load pages for performance
 const Login = lazy(() => import('./pages/Login'));
@@ -75,6 +76,7 @@ function MainApp() {
          setUser(session?.user ?? null);
          if (session?.user) {
            await fetchProfile(session.user.id);
+           initializeNotifications().catch(console.error); // Post-auth push init
          }
        } catch (err) {
          console.error("Auth Init Failure", err);
@@ -90,6 +92,11 @@ function MainApp() {
 
     // 3. Listen for Deep Links while app is open
     const handleAppUrlOpen = async (data: { url: string }) => {
+      // Audit Fix 3.2: HashRouter Deep-Link Rewrite
+      if (data.url.includes('reset-password')) {
+        window.location.hash = '/reset-password';
+      }
+
       const tokens = extractTokensFromUrl(data.url);
       if (tokens && mounted) {
         setLoading(true);
@@ -113,6 +120,7 @@ function MainApp() {
         setUser(session?.user ?? null);
         if (session?.user) {
           fetchProfile(session.user.id);
+          initializeNotifications().catch(console.error); // Post-auth push init
         } else {
           setLoading(false);
         }
