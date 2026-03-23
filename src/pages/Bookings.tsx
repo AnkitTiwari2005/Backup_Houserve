@@ -46,10 +46,7 @@ export default function Bookings() {
         .from('bookings')
         .select(`
           *,
-          services ( name, image_url ),
-          booking_items (
-            services ( name )
-          )
+          services ( name, image_url )
         `)
         .eq('customer_id', profile?.id)
         .order('created_at', { ascending: false });
@@ -134,19 +131,7 @@ export default function Bookings() {
                 </div>
                 <div className="flex-1">
                   <h3 className="font-syne font-bold text-accent mb-1">
-                    {booking.booking_items && booking.booking_items.length > 0 
-                      ? (
-                        <>
-                          {booking.booking_items[0].services?.name}
-                          {booking.booking_items.length > 1 && (
-                            <span className="text-primary ml-1.5">
-                              + {booking.booking_items.length - 1} {booking.booking_items.length - 1 === 1 ? 'other' : 'others'}
-                            </span>
-                          )}
-                        </>
-                      )
-                      : (booking.services?.name || 'Service')
-                    }
+                    {booking.services?.name || 'Service'}
                   </h3>
                   <div className="text-sm text-text-secondary space-y-1 font-medium">
                     <p className="flex items-center gap-1.5">

@@ -1,10 +1,12 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, Suspense, lazy } from 'react';
 import { useAuthStore } from './stores/authStore';
 import { supabase } from './lib/supabase';
 import { PublicRoute, ProtectedRoute } from './components/ProtectedRoute';
+import { App as CapacitorApp } from '@capacitor/app';
+import { SplashScreen } from '@capacitor/splash-screen';
 
-// Lazy load pages for performance (Audit Issue #8)
+// Lazy load pages for performance
 const Login = lazy(() => import('./pages/Login'));
 const Signup = lazy(() => import('./pages/Signup'));
 const OtpVerify = lazy(() => import('./pages/OtpVerify'));
@@ -25,8 +27,6 @@ const Profile = lazy(() => import('./pages/Profile'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 
-import { App as CapacitorApp } from '@capacitor/app';
-
 // Loading Fallback
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center bg-bg">
@@ -34,109 +34,139 @@ const PageLoader = () => (
   </div>
 );
 
-function App() {
+function MainApp() {
   const { setUser, fetchProfile, setLoading } = useAuthStore();
 
   useEffect(() => {
-    // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
+    let mounted = true;
 
-    // Handle deep links for OAuth
-    CapacitorApp.addListener('appUrlOpen', async (data: { url: string }) => {
-      const url = data.url;
-      const fragment = url.split('#')[1];
+    // 1. Robust Token Extractor for Deep Links
+    const extractTokensFromUrl = (url: string) => {
+      // Handles both hash and search params for flexibility
+      const fragment = url.split('#')[1] || url.split('?')[1] || '';
+      if (!fragment) return null;
       
-      if (fragment) {
-        const params = new URLSearchParams(fragment);
-        const accessToken = params.get('access_token');
-        const refreshToken = params.get('refresh_token');
+      const params = new URLSearchParams(fragment);
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      
+      return (accessToken && refreshToken) ? { accessToken, refreshToken } : null;
+    };
 
-        if (accessToken && refreshToken) {
-          const { error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken
-          });
-          
-          if (!error) {
-            // AUTHORITATIVE ROUTING (Audit Fix #2.5)
-            const path = url.split('://')[1]?.split('?')[0]?.split('#')[0] || '';
-            if (path.includes('reset-password')) {
-               window.location.href = '/reset-password';
-            } else if (path.includes('verify-email')) {
-               window.location.href = '/verify-email';
-            } else {
-               window.location.href = '/home';
-            }
-          }
+    // 2. Auth Initialization (Cold Start & Session Check)
+    const initAuth = async () => {
+       // A. Check if opened via deep link (Cold Start)
+       const launchUrl = await CapacitorApp.getLaunchUrl();
+       if (launchUrl?.url) {
+         const tokens = extractTokensFromUrl(launchUrl.url);
+         if (tokens) {
+           await supabase.auth.setSession({
+             access_token: tokens.accessToken,
+             refresh_token: tokens.refreshToken
+           });
+         }
+       }
+
+       // B. Standard session check
+       try {
+         const { data: { session } } = await supabase.auth.getSession();
+         if (!mounted) return;
+         
+         setUser(session?.user ?? null);
+         if (session?.user) {
+           await fetchProfile(session.user.id);
+         }
+       } catch (err) {
+         console.error("Auth Init Failure", err);
+       } finally {
+         if (mounted) {
+           setLoading(false);
+           SplashScreen.hide().catch(() => {});
+         }
+       }
+    };
+
+    initAuth();
+
+    // 3. Listen for Deep Links while app is open
+    const handleAppUrlOpen = async (data: { url: string }) => {
+      const tokens = extractTokensFromUrl(data.url);
+      if (tokens && mounted) {
+        setLoading(true);
+        const { error } = await supabase.auth.setSession({
+          access_token: tokens.accessToken,
+          refresh_token: tokens.refreshToken
+        });
+        if (!error) {
+          // Success will be caught by onAuthStateChange listener
+        } else {
+          setLoading(false);
+        }
+      }
+    };
+
+    CapacitorApp.addListener('appUrlOpen', handleAppUrlOpen);
+
+    // 4. Listen for Auth State Changes (Main Source of Truth)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) {
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          fetchProfile(session.user.id);
+        } else {
+          setLoading(false);
         }
       }
     });
 
-    // Listen for changes on auth state
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
-
-    // Initialize Push Notifications (Audit Fix #2.9)
-    import('./lib/notifications').then(({ initializeNotifications }) => {
-      initializeNotifications();
-    });
-
     return () => {
+      mounted = false;
       subscription.unsubscribe();
       CapacitorApp.removeAllListeners();
     };
   }, [setUser, fetchProfile, setLoading]);
 
   return (
-    <Router>
-      <div className="min-h-screen bg-bg text-text-primary">
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            {/* Public Routes */}
-            <Route element={<PublicRoute />}>
-              <Route path="/splash" element={<Splash />} />
-              <Route path="/onboarding" element={<Onboarding />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              <Route path="/otp-verify" element={<OtpVerify />} />
-            </Route>
+    <div className="min-h-screen bg-bg text-text-primary">
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route element={<PublicRoute />}>
+            <Route path="/splash" element={<Splash />} />
+            <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/otp-verify" element={<OtpVerify />} />
+          </Route>
 
-            {/* Protected Routes */}
-            <Route element={<ProtectedRoute />}>
-              <Route path="/address-selection" element={<AddressSelection />} />
-              <Route path="/add-address" element={<AddAddress />} />
-              <Route path="/home" element={<Home />} />
-              <Route path="/services" element={<Services />} />
-              <Route path="/services/:id" element={<ServiceDetail />} />
-              <Route path="/cart" element={<Cart />} />
-              <Route path="/checkout" element={<Checkout />} />
-              <Route path="/booking-success" element={<BookingSuccess />} />
-              <Route path="/bookings" element={<Bookings />} />
-              <Route path="/bookings/:id" element={<BookingDetail />} />
-              <Route path="/notifications" element={<Notifications />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/" element={<Navigate to="/home" replace />} />
-            </Route>
-            
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/verify-email" element={<VerifyEmail />} />
-            <Route path="*" element={<Navigate to="/splash" replace />} />
-          </Routes>
-        </Suspense>
-      </div>
+          <Route element={<ProtectedRoute />}>
+            <Route path="/home" element={<Home />} />
+            <Route path="/address-selection" element={<AddressSelection />} />
+            <Route path="/add-address" element={<AddAddress />} />
+            <Route path="/services" element={<Services />} />
+            <Route path="/services/:id" element={<ServiceDetail />} />
+            <Route path="/cart" element={<Cart />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/booking-success" element={<BookingSuccess />} />
+            <Route path="/bookings" element={<Bookings />} />
+            <Route path="/bookings/:id" element={<BookingDetail />} />
+            <Route path="/notifications" element={<Notifications />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/" element={<Navigate to="/home" replace />} />
+          </Route>
+          
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="*" element={<Navigate to="/splash" replace />} />
+        </Routes>
+      </Suspense>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <MainApp />
     </Router>
   );
 }

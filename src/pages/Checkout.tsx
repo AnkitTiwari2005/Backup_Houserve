@@ -90,23 +90,8 @@ function CheckoutForm({ bookingDetails, authBreakdown }: { bookingDetails: any, 
         
         if (dbError) throw dbError;
 
-        // 2.5 Insert multi-service line items (Audit Fix #5.3)
-        const bookingItems = items.map(item => ({
-          booking_id: data.id,
-          service_id: item.service.id,
-          quantity: item.quantity,
-          unit_price: item.service.price,
-          total_price: item.service.price * item.quantity
-        }));
-
-        const { error: itemsError } = await supabase
-          .from('booking_items')
-          .insert(bookingItems);
-
-        if (itemsError) {
-          console.error("Operational Warning: Multi-item storage failed", itemsError);
-          // Non-blocking for the user, but should be logged
-        }
+        // Note: The database schema currently only supports a single `service_id` via the `newBooking` object.
+        // Multi-service storage has been deferred until the database schema `booking_items` is initialized.
 
         // 3. Send Admin Email Notification
         const notificationResult = await sendAdminOrderNotification({
@@ -217,13 +202,18 @@ export default function Checkout() {
     const createPaymentIntent = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error('No active session found');
+        if (!session || !session.access_token) {
+           throw new Error('Active session lost. Please login again using the button below.');
+        }
+
+        const token = session.access_token;
 
         const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment-intent`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
+            'Authorization': `Bearer ${token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY
           },
           body: JSON.stringify({
             items: items.map(item => ({
@@ -237,12 +227,14 @@ export default function Checkout() {
         const result = await response.json();
 
         if (!response.ok) {
-          throw new Error(result.error || `Error ${response.status}: ${response.statusText}`);
+          const detail = result.error || result.message || 'Unknown server error';
+          throw new Error(detail);
         }
 
-        if (result.clientSecret) {
-          setClientSecret(result.clientSecret);
-          // AUTHORITATIVE: Update local state with server-calculated totals (Audit fix #5.1)
+        const secret = result.clientSecret || result.client_secret;
+
+        if (secret) {
+          setClientSecret(secret);
           if (result.breakdown) {
             setAuthBreakdown(result.breakdown);
           }
@@ -256,6 +248,7 @@ export default function Checkout() {
         setLoading(false);
       }
     };
+
 
     createPaymentIntent();
   }, [bookingDetails, items, navigate, profile]);
@@ -295,12 +288,23 @@ export default function Checkout() {
             <svg className="w-12 h-12 text-error mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
             <h3 className="font-syne font-bold text-error mb-2 text-lg">Payment Failed to Initialize</h3>
             <p className="text-sm text-text-secondary mb-6 px-4">{initError}</p>
-            <button 
-              onClick={() => window.location.reload()}
-              className="btn-primary"
-            >
-              Try Again
-            </button>
+            <div className="flex flex-col gap-3 px-4">
+              <button 
+                onClick={() => window.location.reload()}
+                className="btn-primary"
+              >
+                Try Again
+              </button>
+              <button 
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  navigate('/login', { replace: true });
+                }}
+                className="w-full py-3 text-sm font-medium text-text-secondary hover:text-primary transition-colors border border-border rounded-xl"
+              >
+                Logout & Re-login (Fixed 401)
+              </button>
+            </div>
           </div>
         ) : loading ? (
           <div className="flex justify-center flex-col items-center py-12 card border border-border border-dashed">

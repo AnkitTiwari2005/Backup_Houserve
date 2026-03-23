@@ -36,13 +36,7 @@ export default function BookingDetail() {
         .from('bookings')
         .select(`
           *,
-          services ( name, image_url, category ),
-          booking_items (
-            id,
-            quantity,
-            total_price,
-            services ( name, image_url )
-          )
+          services ( name, image_url, category )
         `)
         .eq('id', bookingId)
         .single();
@@ -184,44 +178,21 @@ export default function BookingDetail() {
         <div className="card">
           <h3 className="font-syne font-bold text-accent mb-3 text-sm uppercase tracking-wider text-text-secondary">Service Details</h3>
           <div className="space-y-4">
-            {(booking.booking_items && booking.booking_items.length > 0) ? (
-              booking.booking_items.map((item: any) => (
-                <div key={item.id} className="flex justify-between items-start border-b border-gray-50 last:border-0 pb-3 last:pb-0">
-                  <div className="flex gap-3">
-                    <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
-                      {item.services?.image_url ? (
-                        <img src={item.services.image_url} alt="Service" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-xl bg-primary-light">🛠️</div>
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="font-syne font-bold text-accent leading-tight">{item.services?.name}</h4>
-                      <p className="text-xs text-text-secondary mt-1">Quantity: {item.quantity}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-mono font-bold text-gray-700 text-sm">₹{item.total_price}</p>
-                  </div>
+            <div className="flex justify-between items-start">
+              <div className="flex gap-3">
+                <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
+                  {booking.services?.image_url ? (
+                    <img src={booking.services.image_url} alt="Service" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xl bg-primary-light">🛠️</div>
+                  )}
                 </div>
-              ))
-            ) : (
-              <div className="flex justify-between items-start">
-                <div className="flex gap-3">
-                  <div className="w-12 h-12 bg-gray-100 rounded-lg overflow-hidden shrink-0">
-                    {booking.services?.image_url ? (
-                      <img src={booking.services.image_url} alt="Service" className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xl bg-primary-light">🛠️</div>
-                    )}
-                  </div>
-                  <div>
-                    <h4 className="font-syne font-bold text-accent leading-tight">{booking.services?.name}</h4>
-                    <p className="text-xs text-text-secondary mt-1">Category: {booking.services?.category}</p>
-                  </div>
+                <div>
+                  <h4 className="font-syne font-bold text-accent leading-tight">{booking.services?.name}</h4>
+                  <p className="text-xs text-text-secondary mt-1">Category: {booking.services?.category}</p>
                 </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
 
