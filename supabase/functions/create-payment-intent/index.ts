@@ -39,16 +39,20 @@ serve(async (req) => {
       });
     }
 
-    // Use ANON_KEY to initialize the client
-    const supabaseClient = createClient(supabaseUrl, anonKey);
-
-    // SECURE: Cryptographically verify the JWT by fetching the user from the Auth server
+    // SECURE: Initialize client with the user's JWT to verify authenticity
     const jwt = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(jwt);
+    const supabaseClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } }
+    });
+
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
 
     if (authError || !user) {
       console.error('JWT verification failed:', authError);
-      return new Response(JSON.stringify({ error: 'Invalid or expired token. Please login again.' }), {
+      return new Response(JSON.stringify({ 
+        error: 'Invalid JWT', 
+        details: authError?.message || 'Token could not be validated.' 
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 401,
       });
