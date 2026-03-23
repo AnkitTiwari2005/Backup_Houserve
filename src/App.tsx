@@ -1,7 +1,7 @@
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect, Suspense, lazy } from 'react';
 import { useAuthStore } from './stores/authStore';
-import { supabase } from './lib/supabase';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { PublicRoute, ProtectedRoute } from './components/ProtectedRoute';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
@@ -37,6 +37,27 @@ const PageLoader = () => (
 
 function MainApp() {
   const { setUser, fetchProfile, setLoading } = useAuthStore();
+
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-bg p-6 text-center">
+        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border-2 border-primary-light">
+          <div className="text-5xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-syne font-bold text-accent mb-4">Config Required</h2>
+          <p className="text-text-secondary mb-6 font-medium leading-relaxed">
+            The application is missing its Supabase configuration (URL or Anon Key). 
+            If you are the developer, ensure <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> are set in your <code>.env</code> file.
+          </p>
+          <div className="bg-gray-50 p-3 rounded mb-6 text-xs font-mono text-left">
+            VITE_PLATFORM: {import.meta.env.VITE_PLATFORM || 'unknown'}
+          </div>
+          <button onClick={() => window.location.reload()} className="btn-primary w-full">
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -76,7 +97,6 @@ function MainApp() {
          setUser(session?.user ?? null);
          if (session?.user) {
            await fetchProfile(session.user.id);
-           initializeNotifications().catch(console.error); // Post-auth push init
          }
        } catch (err) {
          console.error("Auth Init Failure", err);
