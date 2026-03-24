@@ -1,12 +1,10 @@
 // Supabase Edge Function: admin-notification
-// v2.2 - Security Hardened (No hardcoded keys)
-// Deploy with: supabase functions deploy admin-notification
-
+// v19.0 - Production (Secrets-based, no hardcoded keys)
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
-// SECURE: Resend key is now fetched from Supabase Vault/Secrets
+// SECURE: All credentials from Supabase Secrets
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
-const ADMIN_EMAILS = ["12328.uspc@gmail.com"]
+const ADMIN_EMAIL = Deno.env.get('ADMIN_EMAILS') || '12328.uspc@gmail.com'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,81 +12,127 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  console.log("Edge Function (v2.2) received a request...");
+  console.log("=== admin-notification v19.0 invoked ===")
 
   try {
+    // Validate API key exists
     if (!RESEND_API_KEY) {
-      return new Response(JSON.stringify({ error: "Edge Function misconfigured: RESEND_API_KEY not set in Supabase Secrets." }), {
+      console.error("FATAL: RESEND_API_KEY secret is missing!")
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "Server misconfigured: RESEND_API_KEY not set in Supabase Secrets." 
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500, // STANDARD: Use 500 for server misconfiguration
+        status: 200, // Always 200 so frontend can read error
       })
     }
 
-    const body = await req.json();
-    console.log("Edge Function Received Payload:", JSON.stringify(body));
+    const body = await req.json()
+    console.log("Payload keys:", Object.keys(body))
 
-    const booking = body.booking || {};
-    const customerProfile = body.customerProfile || {};
+    const booking = body.booking || {}
+    const customerProfile = body.customerProfile || {}
+    const items = booking?.items || []
 
-    const customerPhone = booking.phone || customerProfile.phone || 'N/A';
+    // DEFENSIVE: Handle both normalized (address_snapshot) and denormalized (address string)
+    const address = booking?.address_snapshot?.full_address 
+      || booking?.address 
+      || 'N/A'
 
-    const emailBody = `
-      <h2>New Booking Confirmed (Boys@Work)</h2>
-      <p><strong>Booking Ref:</strong> ${booking?.booking_ref || 'N/A'}</p>
-      <p><strong>Customer Name:</strong> ${customerProfile?.full_name || 'Generic User'}</p>
-      <p><strong>Customer Email:</strong> ${customerProfile?.email || 'No email'}</p>
-      <p><strong>Customer Phone:</strong> ${customerPhone}</p>
-      <p><strong>Service:</strong> ${booking?.service_name || 'Unknown Service'}</p>
-      <p><strong>Date:</strong> ${booking?.scheduled_date || 'N/A'}</p>
-      <p><strong>Time:</strong> ${booking?.scheduled_time || 'N/A'}</p>
-      <p><strong>Amount Paid:</strong> ₹${booking?.total_amount || '0'}</p>
-      <p><strong>Address:</strong> ${booking?.address || 'N/A'}</p>
-      <p><strong>Instructions:</strong> ${booking?.special_instructions || 'None'}</p>
-    `
+    // Phone: bookings table has no phone column, pull from profile or address
+    const phone = customerProfile?.phone || booking?.phone || 'N/A'
 
-    console.log(`Sending email to ${ADMIN_EMAILS.join(", ")} via Resend...`);
+    // Build items table HTML
+    let itemsHtml = ''
+    if (items.length > 0) {
+      itemsHtml = `
+        <table border="1" cellpadding="8" style="border-collapse: collapse; width: 100%;">
+          <tr style="background-color: #f17228; color: white;">
+            <th>Service</th>
+            <th style="text-align: center;">Qty</th>
+          </tr>
+          ${items.map((i: any) => `
+            <tr>
+              <td>${i.name || i.service_name || 'Service'}</td>
+              <td style="text-align: center;"><strong>${i.quantity || 1}</strong></td>
+            </tr>
+          `).join('')}
+        </table>`
+    } else {
+      itemsHtml = `<p><strong>Service:</strong> ${booking?.service_name || 'N/A'}</p>`
+    }
 
-    const res = await fetch('https://api.resend.com/emails', {
+    const bookingRef = booking.booking_ref || 'HS-ORDER'
+    const amount = booking.total_amount || 0
+    const addrSnippet = (address || '').split(',')[0] || 'Delhi'
+
+    const emailHtml = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: auto; color: #333; line-height: 1.6;">
+        <h2 style="color: #f17228; border-bottom: 2px solid #f17228; padding-bottom: 10px;">
+          New Booking Confirmed (Houserve)
+        </h2>
+        <p><strong>Booking Ref:</strong> ${bookingRef}</p>
+        <div style="background: #fff8f5; padding: 15px; border-radius: 8px; margin: 15px 0;">
+          <p style="margin: 4px 0;"><strong>Customer:</strong> ${customerProfile?.full_name || 'User'}</p>
+          <p style="margin: 4px 0;"><strong>Email:</strong> ${customerProfile?.email || 'N/A'}</p>
+          <p style="margin: 4px 0;"><strong>Phone:</strong> ${phone}</p>
+        </div>
+        <h3>Order Details:</h3>
+        ${itemsHtml}
+        <hr style="border: none; border-top: 1px solid #eee; margin: 15px 0;" />
+        <p><strong>Scheduled:</strong> ${booking?.scheduled_date || 'N/A'} at ${booking?.scheduled_time || 'N/A'}</p>
+        <p><strong>Total:</strong> ₹${amount}</p>
+        <p><strong>Address:</strong> ${address}</p>
+        <p><strong>Instructions:</strong> ${booking?.special_instructions || 'None'}</p>
+      </div>`
+
+    const subject = `🚀 [NEW ORDER] ${bookingRef} | ₹${amount} | ${addrSnippet}`
+
+    console.log(`Sending to ${ADMIN_EMAIL} via Resend...`)
+
+    const resendRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'Boys@Work <onboarding@resend.dev>',
-        to: ADMIN_EMAILS,
-        subject: `New Order: ${booking.booking_ref} - ${booking.service_name}`,
-        html: emailBody,
+        from: 'Houserve <onboarding@resend.dev>',
+        to: ADMIN_EMAIL,
+        subject,
+        html: emailHtml,
       }),
     })
 
-    const data = await res.json();
-    console.log("Resend API response:", JSON.stringify(data));
+    const resendData = await resendRes.json()
+    console.log("Resend status:", resendRes.status, "Data:", JSON.stringify(resendData))
 
-    if (!res.ok) {
+    if (!resendRes.ok) {
       return new Response(JSON.stringify({
-        error: `Resend API Error: ${data.message || res.statusText}`,
-        code: data.name,
-        details: data
+        success: false,
+        error: resendData.message || resendRes.statusText,
+        details: resendData
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: res.status, // STANDARD: Passthrough the status from Resend
+        status: 200,
       })
     }
 
-    return new Response(JSON.stringify({ success: true, resendData: data }), {
+    return new Response(JSON.stringify({ success: true, resendData }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
-  } catch (error: any) {
-    console.error("Edge Function Error:", error.message);
-    return new Response(JSON.stringify({ error: error.message, status: 'internal_error' }), {
+
+  } catch (err: any) {
+    console.error("Edge Function crash:", err.message)
+    return new Response(JSON.stringify({ success: false, error: err.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500, // STANDARD: Use 500 for internal crashes
+      status: 200,
     })
   }
 })

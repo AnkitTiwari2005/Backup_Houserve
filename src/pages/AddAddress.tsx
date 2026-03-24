@@ -38,7 +38,7 @@ const addressSchema = z.object({
   street: z.string().min(1, 'Street/Area is required'),
   landmark: z.string().optional(),
   city: z.string().refine(val => DELHINCR_CITIES.includes(val), {
-    message: 'Boys@Work currently serves Delhi NCR only'
+    message: 'Houserve currently serves Delhi NCR only'
   }),
   pincode: z.string().length(6, 'Pincode must be exactly 6 digits').regex(/^\d+$/, 'Must be numbers only'),
   phone: z.string().min(10, 'Phone number must be at least 10 digits').regex(/^\d+$/, 'Numbers only'),
@@ -159,7 +159,7 @@ export default function AddAddress() {
         if (permission.location !== 'granted') {
           const request = await Geolocation.requestPermissions();
           if (request.location !== 'granted') {
-            throw new Error('Boys@Work needs your location to show nearby technicians and auto-fill your address. Please enable in Settings.');
+            throw new Error('Houserve needs your location to show nearby technicians and auto-fill your address. Please enable in Settings.');
           }
         }
       }

@@ -143,7 +143,7 @@ serve(async (req) => {
         amount: Math.round(total * 100).toString(),
         currency: 'inr',
         'automatic_payment_methods[enabled]': 'true',
-        description: description || `Boys@Work Booking - ${userEmail}`,
+        description: description || `Houserve Booking - ${userEmail}`,
         'metadata[user_id]': userId,
         'metadata[items_count]': items.length.toString()
       })

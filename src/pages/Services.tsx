@@ -6,9 +6,9 @@ import { useCartStore } from '../stores/cartStore';
 import BottomNav from '../components/BottomNav';
 
 const CATEGORIES = [
-  'All', 'Plumbing', 'Electrical', 'AC Repair', 'Carpentry', 
-  'Painting', 'Appliance Repair', 'Cleaning', 
-  'Pest Control', 'Property Management', 'Facility Management'
+  'All', 'Plumbing', 'Electrical', 'Appliance Repair', 'Carpentry', 
+  'Painting', 'Cleaning', 
+  'Pest Control'
 ];
 
 export default function Services() {

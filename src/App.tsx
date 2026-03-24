@@ -5,7 +5,6 @@ import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { PublicRoute, ProtectedRoute } from './components/ProtectedRoute';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
-import { initializeNotifications } from './lib/notifications';
 
 // Lazy load pages for performance
 const Login = lazy(() => import('./pages/Login'));
@@ -140,7 +139,6 @@ function MainApp() {
         setUser(session?.user ?? null);
         if (session?.user) {
           fetchProfile(session.user.id);
-          initializeNotifications().catch(console.error); // Post-auth push init
         } else {
           setLoading(false);
         }

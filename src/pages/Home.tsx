@@ -13,7 +13,7 @@ export default function Home() {
   const categories = [
     { name: 'Plumbing', price: 299, icon: '🔧', color: 'bg-blue-100' },
     { name: 'Electrical', price: 349, icon: '💡', color: 'bg-yellow-100' },
-    { name: 'AC Repair', price: 499, icon: '❄️', color: 'bg-cyan-100' },
+    { name: 'Appliance Repair', price: 499, icon: '🏠', color: 'bg-cyan-100' },
     { name: 'Carpentry', price: 399, icon: '🪚', color: 'bg-orange-100' },
     { name: 'Painting', price: 999, icon: '🎨', color: 'bg-purple-100' },
     { name: 'Cleaning', price: 599, icon: '🧹', color: 'bg-emerald-100' },
@@ -48,7 +48,7 @@ export default function Home() {
       <div className="bg-surface px-6 pt-6 pb-4 rounded-b-[2.5rem] shadow-md sticky top-0 z-50">
         <div className="flex justify-between items-center mb-4">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-syne font-extrabold text-primary">Boys@Work</h1>
+            <h1 className="text-2xl font-syne font-extrabold text-primary">Houserve</h1>
           </div>
           <button 
             onClick={() => navigate('/notifications')}

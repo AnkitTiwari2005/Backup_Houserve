@@ -64,7 +64,7 @@ export default function Login() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: 'com.boysatwork.app://localhost'
+          redirectTo: 'com.houserve.app://localhost'
         }
       });
       if (error) throw error;
@@ -77,7 +77,7 @@ export default function Login() {
     <div className="min-h-screen bg-bg-dark flex flex-col items-center justify-center p-6 text-white">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
-          <h1 className="text-4xl font-syne font-extrabold text-primary mb-2">Boys@Work</h1>
+          <h1 className="text-4xl font-syne font-extrabold text-primary mb-2">Houserve</h1>
           <p className="font-sans text-gray-400">Delhi NCR's Most Trusted Home Services</p>
         </div>
 
@@ -140,7 +140,7 @@ export default function Login() {
                     setError('');
                     try {
                       const isNative = import.meta.env.VITE_PLATFORM === 'android' || import.meta.env.VITE_PLATFORM === 'ios';
-                      const baseUrl = isNative ? 'com.boysatwork.app://localhost' : window.location.origin;
+                      const baseUrl = isNative ? 'com.houserve.app://localhost' : window.location.origin;
                       
                       const { error } = await supabase.auth.resetPasswordForEmail(email, {
                         redirectTo: `${baseUrl}/reset-password`,

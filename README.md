@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🛠️ Boys@Work
+# 🛠️ Houserve
 ### *A polished home-services booking experience built with React, TypeScript, Vite, Supabase, and Capacitor.*
 
 <p>
@@ -13,7 +13,7 @@
 </p>
 
 <p>
-  <strong>Boys@Work</strong> is a mobile-first service-booking app for home and facility assistance. It guides users from onboarding and authentication all the way to address selection, browsing services, adding items to a cart, placing bookings, tracking orders, and receiving live notifications.
+  <strong>Houserve</strong> is a mobile-first service-booking app for home and facility assistance. It guides users from onboarding and authentication all the way to address selection, browsing services, adding items to a cart, placing bookings, tracking orders, and receiving live notifications.
 </p>
 
 </div>
@@ -37,7 +37,7 @@ This codebase is more than a starter app. It is already shaped like a **real cus
 
 ## 🧭 Product overview
 
-Boys@Work is positioned as a **trusted, polished, doorstep-services experience** for customers in Delhi NCR. The app interface emphasizes:
+Houserve is positioned as a **trusted, polished, doorstep-services experience** for customers in Delhi NCR. The app interface emphasizes:
 
 - **Fast booking** for common household services.
 - **Premium visual design** with bold typography, rounded cards, and warm brand colors.
@@ -262,7 +262,7 @@ That is a great foundation for scaling the UI without visual drift.
 
 ```bash
 git clone <your-repo-url>
-cd BoysAtWork_Final
+cd Houserve
 ```
 
 ### 2. Install dependencies
@@ -393,7 +393,7 @@ No license is currently specified in this repository. Add one if you plan to dis
 
 ### 💥 Final word
 
-**Boys@Work already feels like a real app, not just a template.**  
+**Houserve already feels like a real app, not just a template.**  
 It has a clear brand, a believable booking flow, strong UX direction, and a solid modern stack.
 
 If you wanted this README to be **super duper fine** and **actually worthy of the project**, now it is.

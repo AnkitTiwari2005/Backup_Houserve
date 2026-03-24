@@ -65,7 +65,7 @@ export default function Signup() {
             Back to Login
           </Link>
           <h1 className="text-3xl font-syne font-bold text-accent">Create Account</h1>
-          <p className="text-text-secondary mt-2">Join Boys@Work today</p>
+          <p className="text-text-secondary mt-2">Join Houserve today</p>
         </div>
 
         <div className="bg-surface rounded-3xl p-8 shadow-card">

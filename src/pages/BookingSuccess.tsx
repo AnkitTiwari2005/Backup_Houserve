@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 export default function BookingSuccess() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { bookingRef } = location.state || { bookingRef: 'BAW-XXXXXX' };
+  const { bookingRef } = location.state || { bookingRef: 'HS-XXXXXX' };
 
   return (
     <div className="min-h-screen bg-bg flex flex-col items-center justify-center p-6 text-center">

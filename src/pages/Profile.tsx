@@ -120,7 +120,7 @@ export default function Profile() {
           </button>
         </div>
         
-        <p className="text-center text-xs text-gray-400 py-6">Version 1.1.0</p>
+        <p className="text-center text-xs text-gray-400 py-6">Version 1.2.0</p>
       </div>
 
       <BottomNav />

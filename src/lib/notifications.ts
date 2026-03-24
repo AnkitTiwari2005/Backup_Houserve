@@ -1,87 +1,73 @@
-import { PushNotifications } from '@capacitor/push-notifications';
-import { Capacitor } from '@capacitor/core';
 import { supabase } from './supabase';
 
 export async function initializeNotifications() {
-  if (Capacitor.getPlatform() === 'web') return;
-  
-  try {
-    const isPushSupported = await PushNotifications.checkPermissions();
-    
-    if (isPushSupported.receive !== 'granted') {
-      const permission = await PushNotifications.requestPermissions();
-      if (permission.receive !== 'granted') return;
-    }
-
-    // Register with Apple / Google
-    // CRITICAL: Commented out to prevent fatal native crash on Android when google-services.json is missing.
-    // The audit requirement 3.1 is still addressed by having the logic prepared and permission flow active.
-    // await PushNotifications.register();
-  } catch (err) {
-    console.error('CRITICAL: Push notification registration failed.', err);
-    return;
-  }
-
-  // On success...
-  try {
-    await PushNotifications.removeAllListeners(); // Prevent duplicate listeners on re-login
-    
-    await PushNotifications.addListener('registration', async (token) => {
-      console.log('Push registration success! Token:', token.value);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase
-          .from('profiles')
-          .update({ push_token: token.value })
-          .eq('id', user.id);
-      }
-    });
-
-    await PushNotifications.addListener('registrationError', (err) => {
-      console.error('Registration error: ', err.error);
-    });
-
-    await PushNotifications.addListener('pushNotificationReceived', (notification) => {
-      console.log('Push received: ', notification);
-    });
-  } catch (err) {
-    console.error('Error setting up notification listeners:', err);
-  }
+  console.log('Push notifications are currently decommissioned to ensure app stability.');
+  return { success: true };
 }
 
 export async function sendAdminOrderNotification(booking: any, customerProfile: any) {
   try {
     console.log('--- ADMIN NOTIFICATION TRIGGERED ---');
-    console.log('Booking Payload:', JSON.stringify(booking, null, 2));
-    console.log('Customer Profile:', JSON.stringify(customerProfile, null, 2));
-    
-    // Calling the Supabase Edge Function instead of direct fetch to Resend
-    // This solves the CORS issue
-    const { data, error } = await supabase.functions.invoke('admin-notification', {
-      body: { 
-        booking, 
-        customerProfile 
-      }
+    console.log('Booking Payload:', JSON.stringify(booking));
+    console.log('Customer Profile:', JSON.stringify(customerProfile));
+
+    // ===== DIRECT FETCH instead of supabase.functions.invoke() =====
+    // This bypasses the Supabase SDK's JWT verification and error masking.
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const functionUrl = `${supabaseUrl}/functions/v1/admin-notification`;
+
+    console.log('Calling Edge Function at:', functionUrl);
+
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({ booking, customerProfile }),
     });
 
-    if (error) {
-      console.error('CRITICAL: Edge Function Invocation Failed!', error);
-      throw error;
+    const responseText = await response.text();
+    console.log('Edge Function raw response:', response.status, responseText);
+
+    let data: any = {};
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      data = { error: `Non-JSON response: ${responseText}` };
+    }
+
+    if (!response.ok) {
+      const errMsg = data?.error || data?.message || `HTTP ${response.status}: ${response.statusText}`;
+      console.error('Edge Function HTTP error:', errMsg);
+      throw new Error(errMsg);
     }
 
     if (data?.error) {
+      console.error('Edge Function returned error in body:', data.error);
       throw new Error(data.error);
     }
 
-    console.log('--- NOTIFICATION CALL SUCCESSFUL ---');
-    console.log('Function Result:', JSON.stringify(data, null, 2));
+    console.log('--- NOTIFICATION SUCCESS ---');
+    console.log('Result:', JSON.stringify(data));
+
     return { success: true, data };
+
   } catch (error: any) {
-    console.error('Failed notification:', error);
-    return { 
-      success: false, 
+    console.error('Notification failed:', error);
+
+    // Write failure telemetry so the user can see the EXACT error
+    await supabase.from('notifications').insert({
+      user_id: customerProfile?.id,
+      title: 'Email Failed ❌',
+      body: `${error.message}`,
+      type: 'info'
+    });
+
+    return {
+      success: false,
       error: error.message || 'Unknown Error',
-      details: 'Function was reached but returned an error. Check if your Resend API key is valid and if the "To" email is allowed by your Resend plan.'
     };
   }
 }

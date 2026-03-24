@@ -32,7 +32,7 @@ export default function Splash() {
           <span className="text-6xl transform -rotate-12">🛠️</span>
         </div>
         <h1 className="text-4xl font-syne font-black text-white tracking-tight mb-2">
-          Boys@Work
+          Houserve
         </h1>
         <p className="text-primary-light font-medium tracking-wide">
           HOME & FACILITY SERVICES

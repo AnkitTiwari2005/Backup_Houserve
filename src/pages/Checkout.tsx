@@ -114,19 +114,23 @@ function CheckoutForm({ bookingDetails, authBreakdown }: { bookingDetails: any, 
         }
 
         // 3. Send Admin Email Notification
+        console.log("FINALIZING NOTIFICATION PAYLOAD...");
         const notificationResult = await sendAdminOrderNotification({
           booking_ref: data.booking_ref,
           service_name: allServiceNames,
-          scheduled_date: bookingDetails.preferredDate,
-          scheduled_time: bookingDetails.preferredTime,
-          total_amount: bookingDetails.total,
-          address: selectedAddress?.full_address,
+          items: items.map(i => ({ name: i.service.name, quantity: i.quantity })),
+          scheduled_date: newBooking.scheduled_date,
+          scheduled_time: bookingDetails.preferredTime, 
+          total_amount: newBooking.total_amount,
+          address_snapshot: selectedAddress, // Pass full object as per schema
           phone: selectedAddress?.phone,
-          special_instructions: bookingDetails.specialInstructions
+          special_instructions: newBooking.special_instructions
         }, profile);
 
         if (!notificationResult.success) {
-          console.error("Operational Warning: Admin Notification Failed", notificationResult.error);
+          console.error("CRITICAL: Admin Notification Bridge Failed!", notificationResult.error);
+        } else {
+          console.log("SUCCESS: Notification dispatched to Edge Function.");
         }
 
         // 4. Also add notification
@@ -189,7 +193,7 @@ function CheckoutForm({ bookingDetails, authBreakdown }: { bookingDetails: any, 
       </button>
 
       <p className="text-center text-xs text-text-secondary mt-4">
-        Your payment is securely processed by Stripe. Boys@Work does not store your card details.
+        Your payment is securely processed by Stripe. Houserve does not store your card details.
       </p>
     </form>
   );
