@@ -9,7 +9,7 @@ export interface UserProfile {
   phone: string | null;
   email: string;
   avatar_url: string | null;
-  stripe_customer_id: string | null;
+  razorpay_customer_id: string | null;
 }
 
 interface AuthState {

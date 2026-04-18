@@ -65,8 +65,13 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   platform_fee DECIMAL(10,2) DEFAULT 50.00,
   gst_amount DECIMAL(10,2) NOT NULL,
   total_amount DECIMAL(10,2) NOT NULL,
+  -- Legacy Stripe fields (kept for historical data compatibility)
   stripe_payment_intent_id TEXT,
-  stripe_payment_status TEXT, -- pending, paid, failed
+  stripe_payment_status TEXT,
+  -- Razorpay payment fields (active)
+  razorpay_order_id TEXT,
+  razorpay_payment_id TEXT,
+  payment_status TEXT DEFAULT 'pending', -- pending, paid, failed
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

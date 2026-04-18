@@ -1,18 +1,17 @@
-// Supabase Edge Function: create-payment-intent
-// v3.0 - BYPASS JWT VERIFICATION: Decode payload manually, use service role for DB
-// JWT signature issues bypass: apikey header secures the request at the gateway level
+// Supabase Edge Function: create-razorpay-order
+// Replaces create-payment-intent (Stripe) with Razorpay Orders API
+// Maintains identical auth flow and server-side price calculation
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7'
 
-const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY')
+const RAZORPAY_KEY_ID = Deno.env.get('RAZORPAY_KEY_ID')
+const RAZORPAY_KEY_SECRET = Deno.env.get('RAZORPAY_KEY_SECRET')
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
-
-// Cryptographic verification is enforced by calling supabaseAdmin.auth.getUser()
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -32,8 +31,8 @@ serve(async (req) => {
       });
     }
 
-    if (!STRIPE_SECRET_KEY) {
-       return new Response(JSON.stringify({ error: "Edge Function misconfigured: STRIPE_SECRET_KEY not set." }), {
+    if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
+       return new Response(JSON.stringify({ error: "Edge Function misconfigured: RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET not set." }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,
       });
@@ -59,8 +58,6 @@ serve(async (req) => {
     if (authError || !user) {
       console.warn('Strategy 1 failed, trying Strategy 2 (Admin verification)...');
       try {
-        // We use the service role key to check if this token is actually valid for our project
-        // This is still secure because only a valid token from THIS project can be decoded correctly by the server
         const supabaseAdmin = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
         const { data: adminData, error: adminError } = await supabaseAdmin.auth.getUser(jwt);
         
@@ -133,35 +130,49 @@ serve(async (req) => {
 
     console.log(`[PAYMENT] Total: ₹${total} | Subtotal: ₹${subtotal} | GST: ₹${gst}`);
 
-    const stripeRes = await fetch('https://api.stripe.com/v1/payment_intents', {
+    // Create Razorpay Order
+    const razorpayAuth = btoa(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`);
+    
+    const orderPayload = {
+      amount: Math.round(total * 100), // Razorpay accepts amount in paise
+      currency: 'INR',
+      receipt: `houserve_${Date.now()}_${userId.substring(0, 8)}`,
+      notes: {
+        user_id: userId,
+        user_email: userEmail,
+        items_count: items.length.toString(),
+        description: description || `Houserve Booking - ${userEmail}`
+      }
+    };
+
+    const razorpayRes = await fetch('https://api.razorpay.com/v1/orders', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${STRIPE_SECRET_KEY}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${razorpayAuth}`,
+        'Content-Type': 'application/json',
       },
-      body: new URLSearchParams({
-        amount: Math.round(total * 100).toString(),
-        currency: 'inr',
-        'automatic_payment_methods[enabled]': 'true',
-        description: description || `Houserve Booking - ${userEmail}`,
-        'metadata[user_id]': userId,
-        'metadata[items_count]': items.length.toString()
-      })
+      body: JSON.stringify(orderPayload)
     });
 
-    const stripeData = await stripeRes.json();
-    if (stripeData.error) {
-      console.error('Stripe error:', stripeData.error.message);
-      return new Response(JSON.stringify({ error: `Stripe: ${stripeData.error.message}` }), {
+    const razorpayData = await razorpayRes.json();
+
+    if (!razorpayRes.ok || razorpayData.error) {
+      const errMsg = razorpayData.error?.description || razorpayData.error?.code || 'Unknown Razorpay error';
+      console.error('Razorpay error:', errMsg);
+      return new Response(JSON.stringify({ error: `Razorpay: ${errMsg}` }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
       });
     }
 
+    console.log(`[OK] Razorpay Order created: ${razorpayData.id}`);
+
     return new Response(
       JSON.stringify({
-        clientSecret: stripeData.client_secret,
-        amount: Math.round(total * 100),
+        orderId: razorpayData.id,
+        amount: razorpayData.amount,
+        currency: razorpayData.currency,
+        key_id: RAZORPAY_KEY_ID,
         breakdown: { subtotal, platformFee, gst, total }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
