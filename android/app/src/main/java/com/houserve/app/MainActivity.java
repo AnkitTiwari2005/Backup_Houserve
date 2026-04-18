@@ -1,4 +1,4 @@
-package com.boysatwork.app;
+package com.houserve.app;
 
 import com.getcapacitor.BridgeActivity;
 
