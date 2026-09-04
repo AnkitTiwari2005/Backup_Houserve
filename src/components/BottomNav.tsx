@@ -63,7 +63,10 @@ export default function BottomNav() {
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-border shadow-[0_-4px_12px_rgba(0,0,0,0.05)] pb-safe z-50">
+    <div
+      className="fixed bottom-0 left-0 right-0 bg-white border-t border-border shadow-[0_-4px_12px_rgba(0,0,0,0.05)] z-50"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+    >
       <div className="flex justify-around items-center h-16">
         {navItems.map((item) => {
           const isActive = path === item.path || (item.path !== '/home' && path.startsWith(item.path));

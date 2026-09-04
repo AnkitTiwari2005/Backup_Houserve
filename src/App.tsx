@@ -1,154 +1,214 @@
-import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect, Suspense, lazy } from 'react';
+import { HashRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { useEffect, Suspense, lazy, useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Preferences } from '@capacitor/preferences';
 import { useAuthStore } from './stores/authStore';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { PublicRoute, ProtectedRoute } from './components/ProtectedRoute';
 import { App as CapacitorApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
 
-// Lazy load pages for performance
-const Login = lazy(() => import('./pages/Login'));
-const Signup = lazy(() => import('./pages/Signup'));
-const OtpVerify = lazy(() => import('./pages/OtpVerify'));
-const Splash = lazy(() => import('./pages/Splash'));
-const Onboarding = lazy(() => import('./pages/Onboarding'));
+// Lazy load pages
+const Login        = lazy(() => import('./pages/Login'));
+const Signup       = lazy(() => import('./pages/Signup'));
+const OtpVerify    = lazy(() => import('./pages/OtpVerify'));
+const Onboarding   = lazy(() => import('./pages/Onboarding'));
 const AddressSelection = lazy(() => import('./pages/AddressSelection'));
-const AddAddress = lazy(() => import('./pages/AddAddress'));
-const Home = lazy(() => import('./pages/Home'));
-const Services = lazy(() => import('./pages/Services'));
+const AddAddress   = lazy(() => import('./pages/AddAddress'));
+const Home         = lazy(() => import('./pages/Home'));
+const Services     = lazy(() => import('./pages/Services'));
 const ServiceDetail = lazy(() => import('./pages/ServiceDetail'));
-const Cart = lazy(() => import('./pages/Cart'));
-const Checkout = lazy(() => import('./pages/Checkout'));
+const Cart         = lazy(() => import('./pages/Cart'));
+const Checkout     = lazy(() => import('./pages/Checkout'));
 const BookingSuccess = lazy(() => import('./pages/BookingSuccess'));
-const Bookings = lazy(() => import('./pages/Bookings'));
+const Bookings     = lazy(() => import('./pages/Bookings'));
 const BookingDetail = lazy(() => import('./pages/BookingDetail'));
 const Notifications = lazy(() => import('./pages/Notifications'));
-const Profile = lazy(() => import('./pages/Profile'));
+const Profile      = lazy(() => import('./pages/Profile'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
-const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const VerifyEmail  = lazy(() => import('./pages/VerifyEmail'));
 
-// Loading Fallback
+const FIRST_LAUNCH_KEY = 'hasLaunchedBefore';
+
+// ── Splash Overlay (always renders on every launch, on top of everything) ────
+function SplashOverlay({ onDone }: { onDone: () => void }) {
+  const navigate = useNavigate();
+  const [isFirst, setIsFirst] = useState<boolean | null>(null);
+  const [progress, setProgress] = useState(0);
+
+  const finish = useCallback((first: boolean) => {
+    if (first) {
+      navigate('/onboarding', { replace: true });
+      setTimeout(onDone, 300);
+    } else {
+      onDone();
+    }
+  }, [navigate, onDone]);
+
+  useEffect(() => {
+    let iv: ReturnType<typeof setInterval>;
+    let mounted = true;
+
+    (async () => {
+      const { value } = await Preferences.get({ key: FIRST_LAUNCH_KEY });
+      const first = value === null;
+      if (!mounted) return;
+      setIsFirst(first);
+
+      if (first) {
+        await Preferences.set({ key: FIRST_LAUNCH_KEY, value: 'true' });
+        setTimeout(() => { if (mounted) finish(true); }, 2400);
+      } else {
+        iv = setInterval(() => setProgress(p => Math.min(p + 5, 100)), 80);
+        setTimeout(() => { if (mounted) { clearInterval(iv); finish(false); } }, 1600);
+      }
+    })();
+
+    return () => { mounted = false; clearInterval(iv); };
+  }, [finish]);
+
+  // While checking (< 50ms), show dark screen to avoid flash
+  const showFirst = isFirst === true;
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden"
+      style={{ background: showFirst ? '#F3732A' : '#1A1A2E' }}
+    >
+      {/* Glow blobs */}
+      <div className="absolute top-[-20%] left-[-20%] w-96 h-96 rounded-full blur-3xl pointer-events-none"
+        style={{ background: showFirst ? 'rgba(255,255,255,0.15)' : 'rgba(243,115,42,0.2)' }} />
+      <div className="absolute bottom-[-20%] right-[-20%] w-96 h-96 rounded-full blur-3xl pointer-events-none"
+        style={{ background: showFirst ? 'rgba(26,26,46,0.3)' : 'rgba(243,115,42,0.1)' }} />
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.6, type: 'spring', bounce: 0.4 }}
+        className="flex flex-col items-center z-10"
+      >
+        {/* Soft orange glow ring behind the logo */}
+        <div
+          className="absolute w-64 h-64 rounded-full blur-3xl opacity-40 pointer-events-none"
+          style={{ background: 'radial-gradient(circle, #F3732A 0%, transparent 70%)' }}
+        />
+
+        {/* Logo — large, no box, floats on glow */}
+        <img
+          src="/splash-logo.png"
+          alt="Houserve"
+          className="w-40 h-40 object-contain relative z-10 mb-7 drop-shadow-2xl rounded-[2rem] overflow-hidden"
+        />
+
+        <h1 className="text-4xl font-syne font-black text-white tracking-tight mb-1 z-10">
+          Houserve
+        </h1>
+        <p className="text-white/40 text-xs tracking-widest uppercase mb-10 z-10">
+          Home &amp; Facility Services
+        </p>
+
+
+        {/* First launch: bouncing dots | Returning: progress bar */}
+        {showFirst ? (
+          <div className="flex gap-2">
+            {[0, 1, 2].map(i => (
+              <motion.div key={i}
+                animate={{ y: ['0%', '-70%', '0%'] }}
+                transition={{ duration: 0.7, repeat: Infinity, delay: i * 0.18, ease: 'easeInOut' }}
+                className="w-2.5 h-2.5 bg-white rounded-full"
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="w-44 h-1 bg-white/10 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full rounded-full"
+              style={{ background: '#F3732A' }}
+              animate={{ width: `${progress}%` }}
+              transition={{ ease: 'linear', duration: 0.08 }}
+            />
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
+// ── Page loader ───────────────────────────────────────────────────────────────
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center bg-bg">
-    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
   </div>
 );
 
+// ── Main App ──────────────────────────────────────────────────────────────────
 function MainApp() {
   const { setUser, fetchProfile, setLoading } = useAuthStore();
+  const [splashDone, setSplashDone] = useState(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
-
     let mounted = true;
 
-    // 1. Robust Token Extractor for Deep Links
-    const extractTokensFromUrl = (url: string) => {
-      // Handles both hash and search params for flexibility
+    const extractTokens = (url: string) => {
       const fragment = url.split('#')[1] || url.split('?')[1] || '';
       if (!fragment) return null;
-      
-      const params = new URLSearchParams(fragment);
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
-      
-      return (accessToken && refreshToken) ? { accessToken, refreshToken } : null;
+      const p = new URLSearchParams(fragment);
+      const a = p.get('access_token'), r = p.get('refresh_token');
+      return (a && r) ? { accessToken: a, refreshToken: r } : null;
     };
 
-    // 2. Auth Initialization (Cold Start & Session Check)
     const initAuth = async () => {
-       // A. Check if opened via deep link (Cold Start)
-       const launchUrl = await CapacitorApp.getLaunchUrl();
-       if (launchUrl?.url) {
-         const tokens = extractTokensFromUrl(launchUrl.url);
-         if (tokens) {
-           await supabase.auth.setSession({
-             access_token: tokens.accessToken,
-             refresh_token: tokens.refreshToken
-           });
-         }
-       }
-
-       // B. Standard session check
-       try {
-         const { data: { session } } = await supabase.auth.getSession();
-         if (!mounted) return;
-         
-         setUser(session?.user ?? null);
-         if (session?.user) {
-           await fetchProfile(session.user.id);
-         }
-       } catch (err) {
-         console.error("Auth Init Failure", err);
-       } finally {
-         if (mounted) {
-           setLoading(false);
-           SplashScreen.hide().catch(() => {});
-         }
-       }
+      const launchUrl = await CapacitorApp.getLaunchUrl();
+      if (launchUrl?.url) {
+        const t = extractTokens(launchUrl.url);
+        if (t) await supabase.auth.setSession({ access_token: t.accessToken, refresh_token: t.refreshToken });
+      }
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!mounted) return;
+        setUser(session?.user ?? null);
+        if (session?.user) await fetchProfile(session.user.id);
+      } catch (err) {
+        console.error('Auth Init Failure', err);
+      } finally {
+        if (mounted) { setLoading(false); SplashScreen.hide().catch(() => {}); }
+      }
     };
 
     initAuth();
 
-    // 3. Listen for Deep Links while app is open
     const handleAppUrlOpen = async (data: { url: string }) => {
-      // Audit Fix 3.2: HashRouter Deep-Link Rewrite
-      if (data.url.includes('reset-password')) {
-        window.location.hash = '/reset-password';
-      }
-
-      const tokens = extractTokensFromUrl(data.url);
-      if (tokens && mounted) {
+      if (data.url.includes('reset-password')) window.location.hash = '/reset-password';
+      const t = extractTokens(data.url);
+      if (t && mounted) {
         setLoading(true);
-        const { error } = await supabase.auth.setSession({
-          access_token: tokens.accessToken,
-          refresh_token: tokens.refreshToken
-        });
-        if (!error) {
-          // Success will be caught by onAuthStateChange listener
-        } else {
-          setLoading(false);
-        }
+        const { error } = await supabase.auth.setSession({ access_token: t.accessToken, refresh_token: t.refreshToken });
+        if (error) setLoading(false);
       }
     };
 
     CapacitorApp.addListener('appUrlOpen', handleAppUrlOpen);
-
-    // 4. Listen for Auth State Changes (Main Source of Truth)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       if (mounted) {
         setUser(session?.user ?? null);
-        if (session?.user) {
-          fetchProfile(session.user.id);
-        } else {
-          setLoading(false);
-        }
+        if (session?.user) fetchProfile(session.user.id);
+        else setLoading(false);
       }
     });
 
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-      CapacitorApp.removeAllListeners();
-    };
+    return () => { mounted = false; subscription.unsubscribe(); CapacitorApp.removeAllListeners(); };
   }, [setUser, fetchProfile, setLoading]);
 
   if (!isSupabaseConfigured) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-bg p-6 text-center">
         <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md border-2 border-primary-light">
-          <div className="text-5xl mb-4">⚠️</div>
           <h2 className="text-2xl font-syne font-bold text-accent mb-4">Config Required</h2>
           <p className="text-text-secondary mb-6 font-medium leading-relaxed">
-            The application is missing its Supabase configuration (URL or Anon Key). 
-            If you are the developer, ensure <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> are set in your <code>.env</code> file.
+            Missing <code>VITE_SUPABASE_URL</code> or <code>VITE_SUPABASE_ANON_KEY</code> in your <code>.env</code> file.
           </p>
-          <div className="bg-gray-50 p-3 rounded mb-6 text-xs font-mono text-left">
-            VITE_PLATFORM: {import.meta.env.VITE_PLATFORM || 'unknown'}
-          </div>
-          <button onClick={() => window.location.reload()} className="btn-primary w-full">
-            Retry Connection
-          </button>
+          <button onClick={() => window.location.reload()} className="btn-primary w-full">Retry</button>
         </div>
       </div>
     );
@@ -158,35 +218,52 @@ function MainApp() {
     <div className="min-h-screen bg-bg text-text-primary">
       <Suspense fallback={<PageLoader />}>
         <Routes>
+          {/* Standalone — no auth guard (onboarding must be accessible pre-login) */}
+          <Route path="/onboarding" element={<Onboarding />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+
+          {/* Public — redirects logged-in users away */}
           <Route element={<PublicRoute />}>
-            <Route path="/splash" element={<Splash />} />
-            <Route path="/onboarding" element={<Onboarding />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
+            <Route path="/login"      element={<Login />} />
+            <Route path="/signup"     element={<Signup />} />
             <Route path="/otp-verify" element={<OtpVerify />} />
           </Route>
 
+          {/* Protected — requires login */}
           <Route element={<ProtectedRoute />}>
-            <Route path="/home" element={<Home />} />
+            <Route path="/home"             element={<Home />} />
             <Route path="/address-selection" element={<AddressSelection />} />
-            <Route path="/add-address" element={<AddAddress />} />
-            <Route path="/services" element={<Services />} />
-            <Route path="/services/:id" element={<ServiceDetail />} />
-            <Route path="/cart" element={<Cart />} />
-            <Route path="/checkout" element={<Checkout />} />
-            <Route path="/booking-success" element={<BookingSuccess />} />
-            <Route path="/bookings" element={<Bookings />} />
-            <Route path="/bookings/:id" element={<BookingDetail />} />
-            <Route path="/notifications" element={<Notifications />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/" element={<Navigate to="/home" replace />} />
+            <Route path="/add-address"       element={<AddAddress />} />
+            <Route path="/services"          element={<Services />} />
+            <Route path="/services/:id"      element={<ServiceDetail />} />
+            <Route path="/cart"              element={<Cart />} />
+            <Route path="/checkout"          element={<Checkout />} />
+            <Route path="/booking-success"   element={<BookingSuccess />} />
+            <Route path="/bookings"          element={<Bookings />} />
+            <Route path="/bookings/:id"      element={<BookingDetail />} />
+            <Route path="/notifications"     element={<Notifications />} />
+            <Route path="/profile"           element={<Profile />} />
+            <Route path="/"                  element={<Navigate to="/home" replace />} />
           </Route>
-          
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="*" element={<Navigate to="/splash" replace />} />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+
+      {/* Splash overlay — always shown on every cold launch, regardless of auth state */}
+      <AnimatePresence>
+        {!splashDone && (
+          <motion.div
+            key="splash"
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.35 }}
+            className="fixed inset-0 z-[9999]"
+          >
+            <SplashOverlay onDone={() => setSplashDone(true)} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

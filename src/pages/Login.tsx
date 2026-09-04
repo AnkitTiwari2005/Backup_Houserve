@@ -77,7 +77,11 @@ export default function Login() {
     <div className="min-h-screen bg-bg-dark flex flex-col items-center justify-center p-6 text-white">
       <div className="w-full max-w-md">
         <div className="text-center mb-10">
-          <h1 className="text-4xl font-syne font-extrabold text-primary mb-2">Houserve</h1>
+          <img
+            src="/login-logo.png"
+            alt="Houserve"
+            className="h-12 w-auto object-contain mx-auto mb-3"
+          />
           <p className="font-sans text-gray-400">Delhi NCR's Most Trusted Home Services</p>
         </div>
 
